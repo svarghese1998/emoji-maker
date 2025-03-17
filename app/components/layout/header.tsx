@@ -5,8 +5,8 @@ export function Header() {
   return (
     <header className="flex justify-between items-center p-4 max-w-7xl mx-auto w-full">
       <Link href="/" className="flex items-center gap-2">
-        <Image src="/palette.png" alt="EmojiCraft Logo" width={32} height={32} />
-        <span className="text-2xl font-bold text-[#FF4500]">EmojiCraft</span>
+        <Image src="/ai-moji-logo.svg" alt="AI-moji Logo" width={40} height={40} className="drop-shadow-sm" />
+        <span className="text-2xl font-bold text-[#FF4500]">AI-moji</span>
       </Link>
       <nav>
         <ul className="flex gap-6">

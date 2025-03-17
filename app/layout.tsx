@@ -5,8 +5,8 @@ import { EmojiProvider } from './context/EmojiContext';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'EmojiCraft - Create Custom Emojis',
-  description: 'Generate unique emojis using AI',
+  title: 'AI-moji - Create AI-Generated Emojis',
+  description: 'Generate unique and custom emojis using AI. Create, share, and download your personalized emojis.',
 };
 
 export default function RootLayout({
