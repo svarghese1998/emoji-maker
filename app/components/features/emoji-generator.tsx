@@ -2,12 +2,15 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import { useEmoji } from '@/app/context/EmojiContext';
+import { AlertTriangle } from 'lucide-react';
 
 export function EmojiGenerator() {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedEmoji, setGeneratedEmoji] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; type?: 'nsfw' | 'general' } | null>(null);
+  const { addEmoji } = useEmoji();
 
   const isValidImageUrl = (url: string | null): url is string => {
     return typeof url === 'string' && url.trim() !== '' && url.startsWith('http');
@@ -30,11 +33,16 @@ export function EmojiGenerator() {
         body: JSON.stringify({ prompt }),
       });
 
+      const data = await response.json();
+      
       if (!response.ok) {
+        // Check if the error is related to NSFW content
+        if (response.status === 400 && data.error?.toLowerCase().includes('nsfw')) {
+          throw new Error('NSFW_CONTENT');
+        }
         throw new Error('Failed to generate emoji');
       }
 
-      const data = await response.json();
       console.log('API Response:', data);
       console.log('Output array:', data.output);
       
@@ -44,13 +52,24 @@ export function EmojiGenerator() {
       if (isValidImageUrl(imageUrl)) {
         console.log('Valid URL detected, setting generated emoji');
         setGeneratedEmoji(imageUrl);
+        addEmoji(imageUrl, prompt);
       } else {
         console.log('Invalid URL received:', imageUrl);
         throw new Error('Invalid or empty image URL received');
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Detailed error:', err);
-      setError('Failed to generate emoji. Please try again.');
+      if (err instanceof Error && err.message === 'NSFW_CONTENT') {
+        setError({
+          type: 'nsfw',
+          message: 'We cannot generate this emoji as the prompt may contain inappropriate content. Please try a different, family-friendly prompt.'
+        });
+      } else {
+        setError({
+          type: 'general',
+          message: 'Failed to generate emoji. Please try again.'
+        });
+      }
       console.error('Error:', err);
     } finally {
       setIsGenerating(false);
@@ -64,6 +83,18 @@ export function EmojiGenerator() {
           <div className="animate-pulse text-gray-400 text-center">
             <div className="w-8 h-8 border-4 border-t-[#FF4500] border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin mb-4 mx-auto"></div>
             Generating your emoji...
+          </div>
+        </div>
+      );
+    }
+
+    if (error?.type === 'nsfw') {
+      return (
+        <div className="flex flex-col items-center justify-center w-full h-full text-center px-4">
+          <div className="bg-yellow-50 rounded-lg p-6 max-w-md">
+            <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-yellow-800 mb-2">Content Warning</h3>
+            <p className="text-yellow-700">{error.message}</p>
           </div>
         </div>
       );
@@ -119,7 +150,9 @@ export function EmojiGenerator() {
             {isGenerating ? 'Generating...' : 'Generate'}
           </button>
         </div>
-        {error && <p className="mt-2 text-red-500 text-sm">{error}</p>}
+        {error && error.type !== 'nsfw' && (
+          <p className="mt-2 text-red-500 text-sm">{error.message}</p>
+        )}
       </form>
 
       <div className="w-[512px] h-[512px] border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">

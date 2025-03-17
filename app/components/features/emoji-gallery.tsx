@@ -1,5 +1,8 @@
+'use client';
+
 import Image from 'next/image';
 import { Download, Heart } from 'lucide-react';
+import { useEmoji } from '@/app/context/EmojiContext';
 
 interface EmojiCard {
   id: string;
@@ -9,27 +12,7 @@ interface EmojiCard {
 }
 
 export function EmojiGallery() {
-  // This would come from your database in a real app
-  const emojis: EmojiCard[] = [
-    {
-      id: '1',
-      imageUrl: '/placeholder.png',
-      prompt: 'Happy cat with sunglasses',
-      likes: 24,
-    },
-    {
-      id: '2',
-      imageUrl: '/placeholder.png',
-      prompt: 'Excited dog with party hat',
-      likes: 18,
-    },
-    {
-      id: '3',
-      imageUrl: '/placeholder.png',
-      prompt: 'Sleepy panda with coffee',
-      likes: 32,
-    },
-  ];
+  const { emojis } = useEmoji();
 
   return (
     <section className="py-12">
