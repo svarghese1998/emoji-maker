@@ -22,12 +22,18 @@ const EmojiContext = createContext<EmojiContextType | undefined>(undefined);
 export function EmojiProvider({ children }: { children: ReactNode }) {
   const [emojis, setEmojis] = useState<EmojiCard[]>([]);
   const [likedEmojis, setLikedEmojis] = useState<Set<string>>(new Set());
+  const [mounted, setMounted] = useState(false);
 
-  // Load liked emojis from localStorage on mount
+  // Handle mounting and localStorage
   useEffect(() => {
-    const savedLikes = localStorage.getItem('likedEmojis');
-    if (savedLikes) {
-      setLikedEmojis(new Set(JSON.parse(savedLikes)));
+    setMounted(true);
+    try {
+      const savedLikes = localStorage.getItem('likedEmojis');
+      if (savedLikes) {
+        setLikedEmojis(new Set(JSON.parse(savedLikes)));
+      }
+    } catch (error) {
+      console.error('Error loading liked emojis:', error);
     }
   }, []);
 
@@ -42,6 +48,8 @@ export function EmojiProvider({ children }: { children: ReactNode }) {
   };
 
   const toggleLike = (id: string) => {
+    if (!mounted) return; // Don't process likes until mounted
+
     const isCurrentlyLiked = likedEmojis.has(id);
     
     // Update liked emojis set
@@ -68,10 +76,19 @@ export function EmojiProvider({ children }: { children: ReactNode }) {
 
     // Update liked emojis state and localStorage
     setLikedEmojis(newLikedEmojis);
-    localStorage.setItem('likedEmojis', JSON.stringify([...newLikedEmojis]));
+    try {
+      localStorage.setItem('likedEmojis', JSON.stringify([...newLikedEmojis]));
+    } catch (error) {
+      console.error('Error saving liked emojis:', error);
+    }
   };
 
   const isLiked = (id: string) => likedEmojis.has(id);
+
+  // Return null or loading state before mounting
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <EmojiContext.Provider value={{ emojis, likedEmojis, addEmoji, toggleLike, isLiked }}>

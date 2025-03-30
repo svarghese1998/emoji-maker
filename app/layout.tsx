@@ -1,8 +1,8 @@
 import './globals.css';
 import { type Metadata } from 'next';
-import { ClerkProvider, SignedIn, UserButton } from '@clerk/nextjs';
+import { SignedIn, UserButton } from '@clerk/nextjs';
 import { Geist, Geist_Mono } from 'next/font/google';
-import { EmojiProvider } from './context/EmojiContext';
+import { Providers } from './providers';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -25,30 +25,28 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
-      <html lang="en">
-        <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-          <EmojiProvider>
-            <div className="flex flex-col min-h-screen">
-              <div className="flex justify-end items-center p-4 gap-4 h-16 bg-white/80 backdrop-blur-sm border-b">
-                <SignedIn>
-                  <UserButton 
-                    afterSignOutUrl="/sign-in"
-                    appearance={{
-                      elements: {
-                        avatarBox: "w-10 h-10"
-                      }
-                    }}
-                  />
-                </SignedIn>
-              </div>
-              <main className="flex-1">
-                {children}
-              </main>
+    <html lang="en">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <Providers>
+          <div className="flex flex-col min-h-screen">
+            <div className="flex justify-end items-center p-4 gap-4 h-16 bg-white/80 backdrop-blur-sm border-b">
+              <SignedIn>
+                <UserButton 
+                  afterSignOutUrl="/sign-in"
+                  appearance={{
+                    elements: {
+                      avatarBox: "w-10 h-10"
+                    }
+                  }}
+                />
+              </SignedIn>
             </div>
-          </EmojiProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+            <main className="flex-1">
+              {children}
+            </main>
+          </div>
+        </Providers>
+      </body>
+    </html>
   );
 }
