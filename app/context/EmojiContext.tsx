@@ -9,12 +9,13 @@ export interface EmojiCard {
   likes_count: number;
   creator_user_id: string;
   created_at: string;
+  isLiked: boolean;
 }
 
 interface EmojiContextType {
   emojis: EmojiCard[];
   addEmoji: (imageUrl: string, prompt: string) => void;
-  toggleLike: (id: string) => void;
+  toggleLike: (id: string, currentlyLiked: boolean) => void;
 }
 
 const EmojiContext = createContext<EmojiContextType | undefined>(undefined);
@@ -47,26 +48,33 @@ export function EmojiProvider({ children }: { children: ReactNode }) {
       prompt,
       likes_count: 0,
       creator_user_id: 'temp-id', // This will be set correctly on the server
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      isLiked: false
     };
     setEmojis((prevEmojis) => [newEmoji, ...prevEmojis]);
   };
 
-  const toggleLike = async (id: string) => {
+  const toggleLike = async (id: string, currentlyLiked: boolean) => {
     try {
       const response = await fetch(`/api/emoji/${id}/like`, {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: currentlyLiked ? 'unlike' : 'like'
+        })
       });
       
       if (!response.ok) throw new Error('Failed to toggle like');
       
       const data = await response.json();
       
-      // Update emojis array with new likes count
+      // Update emojis array with new likes count and liked state
       setEmojis((prevEmojis) =>
         prevEmojis.map((emoji) =>
           emoji.id === id
-            ? { ...emoji, likes_count: data.likes_count }
+            ? { ...emoji, likes_count: data.likes_count, isLiked: data.isLiked }
             : emoji
         )
       );

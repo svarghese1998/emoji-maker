@@ -11,6 +11,7 @@ interface EmojiCard {
   likes_count: number;
   creator_user_id: string;
   created_at: string;
+  isLiked: boolean;
 }
 
 export function EmojiGallery() {
@@ -74,16 +75,29 @@ export function EmojiGallery() {
                 </button>
                 <button
                   className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
-                  onClick={() => toggleLike(emoji.id)}
-                  title="Like"
+                  onClick={() => toggleLike(emoji.id, emoji.isLiked)}
+                  title={emoji.isLiked ? "Unlike Emoji" : "Like Emoji"}
                 >
-                  <Heart className={`w-6 h-6 ${emoji.likes_count > 0 ? 'fill-red-500 text-red-500' : ''}`} />
+                  <Heart 
+                    className={`w-6 h-6 transition-transform duration-200 hover:scale-110 ${
+                      emoji.isLiked ? 'fill-red-500 text-red-500' : ''
+                    }`} 
+                  />
                 </button>
               </div>
             </div>
             <div className="mt-4">
               <p className="text-gray-600 text-sm truncate">{emoji.prompt}</p>
-              <p className="text-gray-500 text-xs mt-1">{emoji.likes_count} likes</p>
+              <div className="flex items-center gap-1 mt-1">
+                <Heart 
+                  className={`w-4 h-4 ${
+                    emoji.isLiked ? 'fill-red-500 text-red-500' : 'text-gray-400'
+                  }`} 
+                />
+                <span className="text-gray-500 text-xs">
+                  {emoji.likes_count} {emoji.likes_count === 1 ? 'like' : 'likes'}
+                </span>
+              </div>
             </div>
           </div>
         ))}

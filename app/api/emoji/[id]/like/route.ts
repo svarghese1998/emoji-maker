@@ -8,7 +8,7 @@ export async function POST(
 ) {
   try {
     // Check authentication
-    const { userId } = auth();
+    const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -29,11 +29,19 @@ export async function POST(
       throw getError;
     }
 
-    // Toggle the like by updating likes_count
+    // Get the request body to check if we're liking or unliking
+    const { action } = await request.json();
+    
+    // Update the likes count based on the action
+    const newLikesCount = action === 'like' 
+      ? (emoji.likes_count || 0) + 1 
+      : Math.max((emoji.likes_count || 0) - 1, 0); // Ensure we don't go below 0
+
+    // Update the emoji with new likes count
     const { data: updatedEmoji, error: updateError } = await supabase
       .from('emojis')
       .update({ 
-        likes_count: (emoji.likes_count || 0) + 1
+        likes_count: newLikesCount
       })
       .eq('id', emojiId)
       .select('id, likes_count')
@@ -45,7 +53,8 @@ export async function POST(
 
     return NextResponse.json({
       id: emojiId,
-      likes_count: updatedEmoji.likes_count
+      likes_count: updatedEmoji.likes_count,
+      isLiked: action === 'like'
     });
   } catch (error) {
     console.error('Error toggling emoji like:', error);
