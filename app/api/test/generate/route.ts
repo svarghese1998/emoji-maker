@@ -3,46 +3,34 @@ import { auth } from '@clerk/nextjs';
 import { supabase } from '@/lib/utils/supabase';
 import { uploadEmojiToStorage } from '@/lib/utils/emoji-storage';
 
-export async function POST(req: Request) {
+export async function POST() {
   try {
-    // 1. Test auth
-    const { userId } = auth();
+    // Check authentication
+    const { userId } = await auth();
     if (!userId) {
-      return NextResponse.json({ 
-        error: 'Unauthorized',
-        step: 'auth'
-      }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 2. Test profile creation/retrieval
+    // Check if user exists in profiles
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
       .eq('user_id', userId)
       .single();
 
-    if (profileError && profileError.code !== 'PGRST116') {
-      return NextResponse.json({
-        error: 'Failed to check profile',
-        details: profileError.message,
-        step: 'profile_check'
-      }, { status: 500 });
-    }
-
-    if (!profile) {
-      const { data: newProfile, error: createError } = await supabase
+    // If user doesn't exist in profiles, create them
+    if (profileError?.code === 'PGRST116') {
+      const { error: createError } = await supabase
         .from('profiles')
         .insert([{ user_id: userId }])
         .select()
         .single();
 
       if (createError) {
-        return NextResponse.json({
-          error: 'Failed to create profile',
-          details: createError.message,
-          step: 'profile_create'
-        }, { status: 500 });
+        throw new Error('Failed to create user profile');
       }
+    } else if (profileError) {
+      throw profileError;
     }
 
     // 3. Test storage upload

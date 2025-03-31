@@ -90,6 +90,20 @@ export async function GET() {
     }
     console.log('Profile fetch result:', userProfile ? 'found' : 'not found');
 
+    // Test database connection
+    const { error } = await supabase
+      .from('emojis')
+      .select('*')
+      .limit(1);
+
+    if (error) {
+      return NextResponse.json({
+        error: 'Failed to query database',
+        details: error.message,
+        step: 'database_query'
+      }, { status: 500 });
+    }
+
     // Return successful response
     return NextResponse.json({
       status: 'success',

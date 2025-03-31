@@ -1,10 +1,14 @@
-import { supabase } from './supabase';
-import { supabaseAdmin } from './supabase-admin';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+const supabaseClient = createClient(supabaseUrl, supabaseKey);
 
 async function ensureEmojiBucketExists() {
   try {
     // Check if bucket exists - use admin client for storage operations
-    const { data: buckets, error: listError } = await supabaseAdmin
+    const { data: buckets, error: listError } = await supabaseClient
       .storage
       .listBuckets();
 
@@ -14,7 +18,7 @@ async function ensureEmojiBucketExists() {
     
     if (!emojiBucket) {
       console.log('Emoji bucket not found, creating...');
-      const { data, error: createError } = await supabaseAdmin
+      const { data, error: createError } = await supabaseClient
         .storage
         .createBucket('emoji', {
           public: true,
@@ -74,52 +78,27 @@ export async function uploadEmojiToStorage(
     console.log('Downloading image from:', imageUrl);
     const imageBlob = await downloadImage(imageUrl);
 
-    // Generate a unique filename
-    const timestamp = Date.now();
-    const filename = `${userId}-${timestamp}.png`;
-    console.log('Generated filename:', filename);
+    // Upload to Supabase Storage
+    const fileName = `${userId}/${Date.now()}.png`;
+    const { error } = await supabaseClient.storage
+      .from('emojis')
+      .upload(fileName, imageBlob, {
+        contentType: 'image/png',
+        cacheControl: '3600'
+      });
 
-    // Upload to Supabase storage with retries
-    let uploadAttempts = 3;
-    let uploadError: Error | null = null;
-
-    while (uploadAttempts > 0) {
-      try {
-        // Use admin client for storage operations
-        const { data: uploadData, error: uploadError } = await supabaseAdmin
-          .storage
-          .from('emoji')
-          .upload(filename, imageBlob, {
-            contentType: 'image/png',
-            cacheControl: '3600',
-            upsert: false
-          });
-
-        if (uploadError) throw uploadError;
-        
-        console.log('Upload successful:', uploadData);
-
-        // Get the public URL
-        const { data: { publicUrl } } = supabaseAdmin
-          .storage
-          .from('emoji')
-          .getPublicUrl(filename);
-
-        console.log('Generated public URL:', publicUrl);
-        return publicUrl;
-      } catch (error) {
-        uploadAttempts--;
-        uploadError = error as Error;
-        if (uploadAttempts > 0) {
-          console.log(`Upload failed, retrying... (${uploadAttempts} attempts left)`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
+    if (error) {
+      throw error;
     }
 
-    throw uploadError || new Error('Failed to upload image after all attempts');
+    // Get the public URL
+    const { data: { publicUrl } } = supabaseClient.storage
+      .from('emojis')
+      .getPublicUrl(fileName);
+
+    return publicUrl;
   } catch (error) {
-    console.error('Error in uploadEmojiToStorage:', error);
+    console.error('Error uploading emoji:', error);
     throw error;
   }
 } 

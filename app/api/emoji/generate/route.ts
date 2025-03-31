@@ -29,7 +29,7 @@ export async function POST(req: Request) {
 
     // If user doesn't exist in profiles, create them
     if (profileError?.code === 'PGRST116') {
-      const { data: newProfile, error: createError } = await supabase
+      const { error: createError } = await supabase
         .from('profiles')
         .insert([{ user_id: userId }])
         .select()

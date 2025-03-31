@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { Download, Heart, Sparkles } from 'lucide-react';
 import { useEmoji } from '@/app/context/EmojiContext';
 
-interface EmojiCard {
+type EmojiCardProps = {
   id: string;
   image_url: string;
   prompt: string;
