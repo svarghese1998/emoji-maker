@@ -25,7 +25,7 @@ export function EmojiGenerator() {
     try {
       console.log('Sending prompt:', prompt);
       
-      const response = await fetch('/api/generate', {
+      const response = await fetch('/api/emoji/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -36,25 +36,17 @@ export function EmojiGenerator() {
       const data = await response.json();
       
       if (!response.ok) {
-        // Check if the error is related to NSFW content
-        if (response.status === 400 && data.error?.toLowerCase().includes('nsfw')) {
-          throw new Error('NSFW_CONTENT');
-        }
-        throw new Error('Failed to generate emoji');
+        throw new Error(data.error || 'Failed to generate emoji');
       }
 
       console.log('API Response:', data);
-      console.log('Output array:', data.output);
       
-      const imageUrl = data.output?.[0];
-      console.log('Image URL:', imageUrl);
-      
-      if (isValidImageUrl(imageUrl)) {
+      if (isValidImageUrl(data.image_url)) {
         console.log('Valid URL detected, setting generated emoji');
-        setGeneratedEmoji(imageUrl);
-        addEmoji(imageUrl, prompt);
+        setGeneratedEmoji(data.image_url);
+        addEmoji(data.image_url, prompt);
       } else {
-        console.log('Invalid URL received:', imageUrl);
+        console.log('Invalid URL received:', data.image_url);
         throw new Error('Invalid or empty image URL received');
       }
     } catch (err: unknown) {
