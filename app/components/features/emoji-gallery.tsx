@@ -1,10 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import Image from 'next/image';
-import { Download, Heart, Sparkles } from 'lucide-react';
+import { Download, Heart, Sparkles, AlertCircle } from 'lucide-react';
 import { useEmoji } from '@/app/context/EmojiContext';
 
-type EmojiCardProps = {
+interface Emoji {
   id: string;
   image_url: string;
   prompt: string;
@@ -16,10 +17,16 @@ type EmojiCardProps = {
 
 export function EmojiGallery() {
   const { emojis, toggleLike } = useEmoji();
+  const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
+  const [errorStates, setErrorStates] = useState<Record<string, boolean>>({});
 
-  const handleDownload = async (imageUrl: string, prompt: string) => {
+  const handleDownload = async (imageUrl: string, prompt: string, emojiId: string) => {
     try {
+      setLoadingStates(prev => ({ ...prev, [emojiId]: true }));
+      
       const response = await fetch(imageUrl);
+      if (!response.ok) throw new Error('Failed to download image');
+      
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -31,6 +38,21 @@ export function EmojiGallery() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading image:', error);
+      setErrorStates(prev => ({ ...prev, [emojiId]: true }));
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [emojiId]: false }));
+    }
+  };
+
+  const handleLike = async (id: string, isLiked: boolean) => {
+    try {
+      setLoadingStates(prev => ({ ...prev, [`like-${id}`]: true }));
+      await toggleLike(id, isLiked);
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      setErrorStates(prev => ({ ...prev, [`like-${id}`]: true }));
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [`like-${id}`]: false }));
     }
   };
 
@@ -53,7 +75,7 @@ export function EmojiGallery() {
     <section className="py-12">
       <h2 className="text-3xl font-bold text-center mb-8">Emoji Gallery</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto px-4">
-        {emojis.map((emoji) => (
+        {emojis.map((emoji: Emoji) => (
           <div
             key={emoji.id}
             className="bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow group"
@@ -64,26 +86,38 @@ export function EmojiGallery() {
                 alt={emoji.prompt}
                 fill
                 className="object-contain rounded-lg"
+                onError={() => setErrorStates(prev => ({ ...prev, [emoji.id]: true }))}
               />
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-4">
-                <button 
-                  className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
-                  onClick={() => handleDownload(emoji.image_url, emoji.prompt)}
-                  title="Download Emoji"
-                >
-                  <Download className="w-6 h-6" />
-                </button>
-                <button
-                  className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors"
-                  onClick={() => toggleLike(emoji.id, emoji.isLiked)}
-                  title={emoji.isLiked ? "Unlike Emoji" : "Like Emoji"}
-                >
-                  <Heart 
-                    className={`w-6 h-6 transition-transform duration-200 hover:scale-110 ${
-                      emoji.isLiked ? 'fill-red-500 text-red-500' : ''
-                    }`} 
-                  />
-                </button>
+                {errorStates[emoji.id] ? (
+                  <div className="text-white text-center">
+                    <AlertCircle className="w-6 h-6 mx-auto mb-2" />
+                    <p className="text-sm">Failed to load image</p>
+                  </div>
+                ) : (
+                  <>
+                    <button 
+                      className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50"
+                      onClick={() => handleDownload(emoji.image_url, emoji.prompt, emoji.id)}
+                      disabled={loadingStates[emoji.id]}
+                      title="Download Emoji"
+                    >
+                      <Download className={`w-6 h-6 ${loadingStates[emoji.id] ? 'animate-pulse' : ''}`} />
+                    </button>
+                    <button
+                      className="p-2 bg-white rounded-full hover:bg-gray-100 transition-colors disabled:opacity-50"
+                      onClick={() => handleLike(emoji.id, emoji.isLiked)}
+                      disabled={loadingStates[`like-${emoji.id}`]}
+                      title={emoji.isLiked ? "Unlike Emoji" : "Like Emoji"}
+                    >
+                      <Heart 
+                        className={`w-6 h-6 transition-transform duration-200 hover:scale-110 ${
+                          loadingStates[`like-${emoji.id}`] ? 'animate-pulse' : ''
+                        } ${emoji.isLiked ? 'fill-red-500 text-red-500' : ''}`} 
+                      />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
             <div className="mt-4">
@@ -97,6 +131,9 @@ export function EmojiGallery() {
                 <span className="text-gray-500 text-xs">
                   {emoji.likes_count} {emoji.likes_count === 1 ? 'like' : 'likes'}
                 </span>
+                {errorStates[`like-${emoji.id}`] && (
+                  <span className="text-red-500 text-xs ml-2">Failed to update</span>
+                )}
               </div>
             </div>
           </div>

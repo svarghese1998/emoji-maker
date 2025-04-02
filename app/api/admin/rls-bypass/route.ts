@@ -1,134 +1,135 @@
-import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Define allowed tables for extra security
-const ALLOWED_TABLES = ['emojis', 'profiles'] as const;
-type AllowedTable = typeof ALLOWED_TABLES[number];
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Define filter types
-type EqFilter = [string, string | number | boolean];
-
-interface Filters {
-  eq?: EqFilter;
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase environment variables');
 }
+
+const supabaseAdmin = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
 
 interface AdminRequest {
-  operation: 'select' | 'insert' | 'update' | 'delete';
-  table: AllowedTable;
+  table: string;
+  action: 'select' | 'insert' | 'update' | 'delete';
   data?: Record<string, unknown>;
-  filters?: Filters;
+  match?: Record<string, unknown>;
 }
 
-type SupabaseResponse = {
-  data: unknown;
-  error: null | {
+interface SupabaseResponse {
+  data: unknown[] | null;
+  error: {
     message: string;
     code: string;
-  };
-};
+  } | null;
+}
 
-/**
- * Handler for admin operations that need to bypass RLS
- */
+const ALLOWED_TABLES = ['profiles', 'emojis', 'likes'];
+
 export async function POST(req: Request) {
   try {
-    // Check if user is authenticated and is an admin
-    const { userId } = await auth();
-    if (!userId || !process.env.ADMIN_USER_IDS?.split(',').includes(userId)) {
+    // Verify admin status
+    const { userId } = auth();
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get operation details from request
-    const body = await req.json();
-    
-    // Validate table name
-    if (!ALLOWED_TABLES.includes(body.table)) {
-      return NextResponse.json({ error: 'Invalid table' }, { status: 400 });
-    }
-    
-    const { operation, table, data, filters } = body as AdminRequest;
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('user_id', userId)
+      .single();
 
-    // Create Supabase client with service role key
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('Missing Supabase configuration');
+    if (!profile || profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
+    // Parse and validate request
+    const body: AdminRequest = await req.json();
+    const { table, action, data, match } = body;
 
-    let result: SupabaseResponse;
-    switch (operation) {
-      case 'select': {
-        let query = supabase
+    if (!ALLOWED_TABLES.includes(table)) {
+      return NextResponse.json(
+        { error: `Invalid table: ${table}` },
+        { status: 400 }
+      );
+    }
+
+    // Execute request based on action
+    let response: SupabaseResponse;
+
+    switch (action) {
+      case 'select':
+        response = await supabaseAdmin
           .from(table)
-          .select(data ? Object.keys(data).join(',') : '*');
-          
-        if (filters?.eq) {
-          query = query.eq(filters.eq[0], filters.eq[1]);
-        }
-        
-        result = await query;
+          .select('*')
+          .eq(match ? Object.keys(match)[0] : 'id', match ? Object.values(match)[0] : '*');
         break;
-      }
-      
-      case 'insert': {
+
+      case 'insert':
         if (!data) {
-          return NextResponse.json({ error: 'Data required for insert' }, { status: 400 });
+          return NextResponse.json(
+            { error: 'Data is required for insert' },
+            { status: 400 }
+          );
         }
-        result = await supabase
+        response = await supabaseAdmin
           .from(table)
           .insert(data)
           .select();
         break;
-      }
-      
-      case 'update': {
-        if (!data) {
-          return NextResponse.json({ error: 'Data required for update' }, { status: 400 });
+
+      case 'update':
+        if (!data || !match) {
+          return NextResponse.json(
+            { error: 'Data and match criteria are required for update' },
+            { status: 400 }
+          );
         }
-        if (!filters?.eq) {
-          return NextResponse.json({ error: 'Filter required for update' }, { status: 400 });
-        }
-        
-        let query = supabase
+        response = await supabaseAdmin
           .from(table)
           .update(data)
-          .eq(filters.eq[0], filters.eq[1]);
-        
-        result = await query.select();
+          .match(match)
+          .select();
         break;
-      }
-      
-      case 'delete': {
-        if (!filters?.eq) {
-          return NextResponse.json({ error: 'Filter required for delete' }, { status: 400 });
+
+      case 'delete':
+        if (!match) {
+          return NextResponse.json(
+            { error: 'Match criteria is required for delete' },
+            { status: 400 }
+          );
         }
-        
-        let query = supabase
+        response = await supabaseAdmin
           .from(table)
           .delete()
-          .eq(filters.eq[0], filters.eq[1]);
-        
-        result = await query.select();
+          .match(match)
+          .select();
         break;
-      }
-      
+
       default:
-        return NextResponse.json({ error: 'Invalid operation' }, { status: 400 });
+        return NextResponse.json(
+          { error: `Invalid action: ${action}` },
+          { status: 400 }
+        );
     }
 
-    if (result.error) {
-      throw new Error(`Admin operation failed: ${result.error.message}`);
+    if (response.error) {
+      throw response.error;
     }
 
-    return NextResponse.json(result.data);
+    return NextResponse.json({ data: response.data });
   } catch (error) {
-    console.error('Error in admin RLS bypass:', error);
+    console.error('Admin operation error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Admin operation failed' },
+      { error: error instanceof Error ? error.message : 'Internal server error' },
       { status: 500 }
     );
   }

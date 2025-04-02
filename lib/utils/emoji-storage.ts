@@ -1,7 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase environment variables');
+}
 
 const supabaseClient = createClient(supabaseUrl, supabaseKey);
 
@@ -66,39 +70,45 @@ async function downloadImage(imageUrl: string): Promise<Blob> {
   throw lastError || new Error('Failed to download image after all attempts');
 }
 
-export async function uploadEmojiToStorage(
-  imageUrl: string,
-  userId: string
-): Promise<string> {
+export async function uploadEmojiToStorage(imageUrl: string, userId: string): Promise<string> {
   try {
-    // First ensure the bucket exists
-    await ensureEmojiBucketExists();
-
-    // Download the image
-    console.log('Downloading image from:', imageUrl);
-    const imageBlob = await downloadImage(imageUrl);
-
-    // Upload to Supabase Storage
-    const fileName = `${userId}/${Date.now()}.png`;
-    const { error } = await supabaseClient.storage
-      .from('emojis')
-      .upload(fileName, imageBlob, {
-        contentType: 'image/png',
-        cacheControl: '3600'
-      });
-
-    if (error) {
-      throw error;
+    // Download image from URL
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to download image: ${response.statusText}`);
     }
 
-    // Get the public URL
-    const { data: { publicUrl } } = supabaseClient.storage
+    const blob = await response.blob();
+    const timestamp = Date.now();
+    const filename = `${userId}-${timestamp}.png`;
+
+    // Upload to Supabase Storage
+    const { error: uploadError } = await supabaseClient
+      .storage
       .from('emojis')
-      .getPublicUrl(fileName);
+      .upload(filename, blob, {
+        contentType: 'image/png',
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    // Get public URL
+    const { data: { publicUrl } } = supabaseClient
+      .storage
+      .from('emojis')
+      .getPublicUrl(filename);
+
+    if (!publicUrl) {
+      throw new Error('Failed to get public URL');
+    }
 
     return publicUrl;
   } catch (error) {
-    console.error('Error uploading emoji:', error);
+    console.error('Error in uploadEmojiToStorage:', error);
     throw error;
   }
 } 
