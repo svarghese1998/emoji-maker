@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs';
 import { createClient } from '@supabase/supabase-js';
 
+export const runtime = 'nodejs';
+
 // List of admin user IDs that are allowed to bypass RLS
 // In a production app, this should be stored securely, not hardcoded
 const ADMIN_USER_IDS = process.env.ADMIN_USER_IDS ? 
