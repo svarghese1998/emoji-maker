@@ -2,17 +2,24 @@ import { createClient } from '@supabase/supabase-js';
 
 // Environment variables for admin access
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase environment variables');
+if (!supabaseUrl) {
+  throw new Error('Missing environment variable: NEXT_PUBLIC_SUPABASE_URL');
+}
+
+if (!supabaseServiceKey) {
+  throw new Error('Missing environment variable: SUPABASE_SERVICE_ROLE_KEY');
 }
 
 // Create admin client with service role key to bypass RLS
-export const supabaseAdmin = createClient(supabaseUrl, supabaseKey, {
+export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
+    persistSession: false,
     autoRefreshToken: false,
-    persistSession: false
+  },
+  db: {
+    schema: 'public'
   }
 });
 

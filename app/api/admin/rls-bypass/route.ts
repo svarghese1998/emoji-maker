@@ -1,135 +1,120 @@
-import { auth } from '@clerk/nextjs';
 import { NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// List of admin user IDs that are allowed to bypass RLS
+// In a production app, this should be stored securely, not hardcoded
+const ADMIN_USER_IDS = process.env.ADMIN_USER_IDS ? 
+  process.env.ADMIN_USER_IDS.split(',') : 
+  [];
 
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase environment variables');
+// Define filter types
+type EqFilter = [string, string | number | boolean];
+
+interface Filters {
+  eq?: EqFilter;
 }
-
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
-  }
-});
 
 interface AdminRequest {
+  operation: 'select' | 'insert' | 'update' | 'delete';
   table: string;
-  action: 'select' | 'insert' | 'update' | 'delete';
-  data?: Record<string, unknown>;
-  match?: Record<string, unknown>;
+  data?: any;
+  filters?: Filters;
 }
 
-interface SupabaseResponse {
-  data: unknown[] | null;
-  error: {
+// Define proper types for the response data
+type SupabaseResponse = {
+  data: unknown;
+  error: null | {
     message: string;
     code: string;
-  } | null;
-}
+  };
+};
 
-const ALLOWED_TABLES = ['profiles', 'emojis', 'likes'];
-
+/**
+ * Handler for admin operations that need to bypass RLS
+ */
 export async function POST(req: Request) {
   try {
-    // Verify admin status
+    // Check if user is authenticated and is an admin
     const { userId } = auth();
-    if (!userId) {
+    if (!userId || !ADMIN_USER_IDS.includes(userId)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('user_id', userId)
-      .single();
+    // Get operation details from request
+    const { operation, table, data, filters } = await req.json() as AdminRequest;
 
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    // Create Supabase client with service role key
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
-    // Parse and validate request
-    const body: AdminRequest = await req.json();
-    const { table, action, data, match } = body;
-
-    if (!ALLOWED_TABLES.includes(table)) {
-      return NextResponse.json(
-        { error: `Invalid table: ${table}` },
-        { status: 400 }
-      );
-    }
-
-    // Execute request based on action
-    let response: SupabaseResponse;
-
-    switch (action) {
+    let result: SupabaseResponse;
+    switch (operation) {
       case 'select':
-        response = await supabaseAdmin
-          .from(table)
-          .select('*')
-          .eq(match ? Object.keys(match)[0] : 'id', match ? Object.values(match)[0] : '*');
-        break;
-
-      case 'insert':
-        if (!data) {
-          return NextResponse.json(
-            { error: 'Data is required for insert' },
-            { status: 400 }
-          );
+        {
+          let query = supabase
+            .from(table)
+            .select(data || '*');
+            
+          if (filters?.eq) {
+            query = query.eq(filters.eq[0], filters.eq[1]);
+          }
+          
+          result = await query;
         }
-        response = await supabaseAdmin
+        break;
+      
+      case 'insert':
+        result = await supabase
           .from(table)
           .insert(data)
           .select();
         break;
-
+      
       case 'update':
-        if (!data || !match) {
-          return NextResponse.json(
-            { error: 'Data and match criteria are required for update' },
-            { status: 400 }
-          );
+        {
+          let query = supabase
+            .from(table)
+            .update(data);
+            
+          if (filters?.eq) {
+            query = query.eq(filters.eq[0], filters.eq[1]);
+          }
+          
+          result = await query.select();
         }
-        response = await supabaseAdmin
-          .from(table)
-          .update(data)
-          .match(match)
-          .select();
         break;
-
+      
       case 'delete':
-        if (!match) {
-          return NextResponse.json(
-            { error: 'Match criteria is required for delete' },
-            { status: 400 }
-          );
+        {
+          let query = supabase
+            .from(table)
+            .delete();
+            
+          if (filters?.eq) {
+            query = query.eq(filters.eq[0], filters.eq[1]);
+          }
+          
+          result = await query.select();
         }
-        response = await supabaseAdmin
-          .from(table)
-          .delete()
-          .match(match)
-          .select();
         break;
-
+      
       default:
-        return NextResponse.json(
-          { error: `Invalid action: ${action}` },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: 'Invalid operation' }, { status: 400 });
     }
 
-    if (response.error) {
-      throw response.error;
+    if (result.error) {
+      throw new Error(`Admin operation failed: ${result.error.message}`);
     }
 
-    return NextResponse.json({ data: response.data });
+    return NextResponse.json(result.data);
   } catch (error) {
-    console.error('Admin operation error:', error);
+    console.error('Error in admin RLS bypass:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: error instanceof Error ? error.message : 'Admin operation failed' },
       { status: 500 }
     );
   }

@@ -1,28 +1,26 @@
-import { createClient } from '@supabase/supabase-js';
+import { getAuthenticatedClient } from './supabase';
+import { SupabaseClient } from '@supabase/supabase-js';
+import { auth } from '@clerk/nextjs';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase environment variables');
+interface Bucket {
+  name: string;
+  [key: string]: any;
 }
 
-const supabaseClient = createClient(supabaseUrl, supabaseKey);
-
-async function ensureEmojiBucketExists() {
+async function ensureEmojiBucketExists(supabase: SupabaseClient) {
   try {
-    // Check if bucket exists - use admin client for storage operations
-    const { data: buckets, error: listError } = await supabaseClient
+    // Check if bucket exists
+    const { data: buckets, error: listError } = await supabase
       .storage
       .listBuckets();
 
     if (listError) throw listError;
 
-    const emojiBucket = buckets?.find(bucket => bucket.name === 'emoji');
+    const emojiBucket = buckets?.find((bucket: Bucket) => bucket.name === 'emoji');
     
     if (!emojiBucket) {
       console.log('Emoji bucket not found, creating...');
-      const { data, error: createError } = await supabaseClient
+      const { error: createError } = await supabase
         .storage
         .createBucket('emoji', {
           public: true,
@@ -70,45 +68,62 @@ async function downloadImage(imageUrl: string): Promise<Blob> {
   throw lastError || new Error('Failed to download image after all attempts');
 }
 
-export async function uploadEmojiToStorage(imageUrl: string, userId: string): Promise<string> {
+export async function uploadEmojiToStorage(imageUrl: string, prompt: string) {
   try {
-    // Download image from URL
-    const response = await fetch(imageUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to download image: ${response.statusText}`);
+    const { userId } = auth();
+    if (!userId) {
+      throw new Error('User not authenticated');
     }
 
-    const blob = await response.blob();
-    const timestamp = Date.now();
-    const filename = `${userId}-${timestamp}.png`;
-
+    const supabase = await getAuthenticatedClient();
+    
+    // Ensure emoji bucket exists
+    await ensureEmojiBucketExists(supabase);
+    
+    // Download the image from the URL
+    const imageBlob = await downloadImage(imageUrl);
+    
+    // Generate a unique filename
+    const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+    
     // Upload to Supabase Storage
-    const { error: uploadError } = await supabaseClient
+    const { data: storageData, error: storageError } = await supabase
       .storage
-      .from('emojis')
-      .upload(filename, blob, {
+      .from('emoji')
+      .upload(filename, imageBlob, {
         contentType: 'image/png',
         cacheControl: '3600',
-        upsert: false
       });
 
-    if (uploadError) {
-      throw uploadError;
+    if (storageError) {
+      throw storageError;
     }
 
-    // Get public URL
-    const { data: { publicUrl } } = supabaseClient
+    // Get the public URL
+    const { data: publicUrl } = supabase
       .storage
-      .from('emojis')
+      .from('emoji')
       .getPublicUrl(filename);
 
-    if (!publicUrl) {
-      throw new Error('Failed to get public URL');
+    // Save to emojis table
+    const { error: dbError } = await supabase
+      .from('emojis')
+      .insert([
+        {
+          image_url: publicUrl.publicUrl,
+          prompt,
+          likes_count: 0,
+          creator_user_id: userId,
+        },
+      ]);
+
+    if (dbError) {
+      throw dbError;
     }
 
-    return publicUrl;
+    return publicUrl.publicUrl;
   } catch (error) {
-    console.error('Error in uploadEmojiToStorage:', error);
+    console.error('Error uploading emoji:', error);
     throw error;
   }
 } 
