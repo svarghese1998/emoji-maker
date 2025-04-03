@@ -4,6 +4,8 @@ import { supabase } from '@/lib/utils/supabase';
 import { uploadEmojiToStorage } from '@/lib/utils/emoji-storage';
 import Replicate from 'replicate';
 
+export const runtime = 'nodejs';
+
 if (!process.env.REPLICATE_API_TOKEN) {
   throw new Error('Missing REPLICATE_API_TOKEN');
 }
@@ -53,6 +55,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
     }
 
+    console.log('Starting image generation with prompt:', prompt);
     const prediction = await replicate.predictions.create({
       version: "dee76b5afde21b0f01ed7925f0665b7e879c50ee718c5f78a9d38e04d523cc5e",
       input: {
@@ -64,13 +67,18 @@ export async function POST(req: Request) {
 
     // 4. Wait for generation to complete
     let result = prediction;
-    while (result.status !== "succeeded" && result.status !== "failed") {
+    let attempts = 0;
+    const maxAttempts = 30; // 30 seconds timeout
+
+    while (result.status !== "succeeded" && result.status !== "failed" && attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       result = await replicate.predictions.get(prediction.id);
+      attempts++;
+      console.log(`Checking generation status (attempt ${attempts}): ${result.status}`);
     }
 
-    if (result.status === "failed") {
-      throw new Error("Image generation failed");
+    if (result.status === "failed" || attempts >= maxAttempts) {
+      throw new Error(attempts >= maxAttempts ? "Image generation timed out" : "Image generation failed");
     }
 
     const imageUrl = result.output?.[0];
@@ -78,8 +86,10 @@ export async function POST(req: Request) {
       throw new Error("Invalid image URL received");
     }
 
+    console.log('Image generated successfully:', imageUrl);
+
     // 5. Upload to Supabase storage and get public URL
-    const publicUrl = await uploadEmojiToStorage(imageUrl, userId);
+    const publicUrl = await uploadEmojiToStorage(imageUrl, prompt);
 
     // 6. Save to emojis table with exact schema types
     const { data: emojiData, error: emojiError } = await supabase

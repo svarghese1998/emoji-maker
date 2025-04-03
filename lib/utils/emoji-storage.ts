@@ -83,8 +83,11 @@ export async function uploadEmojiToStorage(imageUrl: string, prompt: string) {
     // Download the image from the URL
     const imageBlob = await downloadImage(imageUrl);
     
-    // Generate a unique filename
-    const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+    // Generate a unique filename using prompt and timestamp
+    const sanitizedPrompt = prompt.replace(/[^a-z0-9]/gi, '-').toLowerCase().slice(0, 30);
+    const filename = `${sanitizedPrompt}-${Date.now()}.png`;
+    
+    console.log('Uploading emoji to storage:', filename);
     
     // Upload to Supabase Storage
     const { data: storageData, error: storageError } = await supabase
@@ -96,6 +99,7 @@ export async function uploadEmojiToStorage(imageUrl: string, prompt: string) {
       });
 
     if (storageError) {
+      console.error('Storage error:', storageError);
       throw storageError;
     }
 
@@ -105,22 +109,7 @@ export async function uploadEmojiToStorage(imageUrl: string, prompt: string) {
       .from('emoji')
       .getPublicUrl(filename);
 
-    // Save to emojis table
-    const { error: dbError } = await supabase
-      .from('emojis')
-      .insert([
-        {
-          image_url: publicUrl.publicUrl,
-          prompt,
-          likes_count: 0,
-          creator_user_id: userId,
-        },
-      ]);
-
-    if (dbError) {
-      throw dbError;
-    }
-
+    console.log('Emoji uploaded successfully:', publicUrl.publicUrl);
     return publicUrl.publicUrl;
   } catch (error) {
     console.error('Error uploading emoji:', error);
