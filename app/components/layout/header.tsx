@@ -1,8 +1,15 @@
+'use client';
+
 import Link from 'next/link';
 import Image from 'next/image';
 import { SignInButton, UserButton } from "@clerk/nextjs";
+import { usePathname } from 'next/navigation';
 
 export function Header() {
+  const pathname = usePathname();
+
+  const isActive = (path: string) => pathname === path;
+
   return (
     <header className="flex justify-between items-center p-4 max-w-7xl mx-auto w-full">
       <Link href="/" className="flex items-center gap-2">
@@ -11,13 +18,48 @@ export function Header() {
       </Link>
       <nav className="flex items-center gap-6">
         <ul className="flex gap-6">
-          <li><Link href="/" className="text-black hover:text-[#FF4500]">Home</Link></li>
-          <li><Link href="/gallery" className="text-black hover:text-[#FF4500]">Gallery</Link></li>
-          <li><Link href="/about" className="text-black hover:text-[#FF4500]">About</Link></li>
+          <li>
+            <Link 
+              href="/" 
+              className={`transition-colors duration-200 ${
+                isActive('/') 
+                  ? 'text-[#FF4500] font-medium' 
+                  : 'text-[#2D3047] hover:text-[#FF4500]'
+              }`}
+            >
+              Home
+            </Link>
+          </li>
+          <li>
+            <Link 
+              href="/create" 
+              className={`transition-colors duration-200 ${
+                isActive('/create') 
+                  ? 'text-[#FF4500] font-medium' 
+                  : 'text-[#2D3047] hover:text-[#FF4500]'
+              }`}
+            >
+              Create ✨
+            </Link>
+          </li>
+          <li>
+            <Link 
+              href="/gallery" 
+              className={`transition-colors duration-200 ${
+                isActive('/gallery') 
+                  ? 'text-[#FF4500] font-medium' 
+                  : 'text-[#2D3047] hover:text-[#FF4500]'
+              }`}
+            >
+              Gallery
+            </Link>
+          </li>
         </ul>
         <div className="flex items-center gap-4">
           <SignInButton mode="modal">
-            <button className="text-black hover:text-[#FF4500]">Sign In</button>
+            <button className="text-[#2D3047] hover:text-[#FF4500] transition-colors duration-200">
+              Sign In
+            </button>
           </SignInButton>
           <UserButton afterSignOutUrl="/"/>
         </div>

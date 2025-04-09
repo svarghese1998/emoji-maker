@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { useEmoji } from '@/app/context/EmojiContext';
 import { AlertTriangle } from 'lucide-react';
+import confetti from 'canvas-confetti';
 
 export function EmojiGenerator() {
   const [prompt, setPrompt] = useState('');
@@ -11,6 +12,55 @@ export function EmojiGenerator() {
   const [generatedEmoji, setGeneratedEmoji] = useState<string | null>(null);
   const [error, setError] = useState<{ message: string; type?: 'nsfw' | 'general' } | null>(null);
   const { addEmoji } = useEmoji();
+
+  const triggerConfetti = () => {
+    // Fire multiple confetti bursts
+    const count = 3;
+    const defaults = {
+      spread: 360,
+      ticks: 100,
+      gravity: 0.5,
+      decay: 0.94,
+      startVelocity: 30,
+      shapes: ['star'],
+      colors: ['#FFB5A7', '#FF8FA3', '#FF6571', '#FFC7B8', '#FFD6CC']
+    };
+
+    function fire(particleRatio: number, opts: any) {
+      confetti({
+        ...defaults,
+        ...opts,
+        particleCount: Math.floor(200 * particleRatio)
+      });
+    }
+
+    fire(0.25, {
+      spread: 26,
+      startVelocity: 55,
+    });
+
+    fire(0.2, {
+      spread: 60,
+    });
+
+    fire(0.35, {
+      spread: 100,
+      decay: 0.91,
+      scalar: 0.8
+    });
+
+    fire(0.1, {
+      spread: 120,
+      startVelocity: 25,
+      decay: 0.92,
+      scalar: 1.2
+    });
+
+    fire(0.1, {
+      spread: 120,
+      startVelocity: 45,
+    });
+  };
 
   const isValidImageUrl = (url: string | null): url is string => {
     return typeof url === 'string' && url.trim() !== '' && url.startsWith('http');
@@ -41,10 +91,19 @@ export function EmojiGenerator() {
 
       console.log('API Response:', data);
       
+      if (data.error === 'nsfw') {
+        setError({
+          type: 'nsfw',
+          message: 'We cannot generate this emoji as the prompt may contain inappropriate content. Please try a different, family-friendly prompt.'
+        });
+        return;
+      }
+
       if (isValidImageUrl(data.image_url)) {
         console.log('Valid URL detected, setting generated emoji');
         setGeneratedEmoji(data.image_url);
         addEmoji(data.image_url, prompt);
+        triggerConfetti();
       } else {
         console.log('Invalid URL received:', data.image_url);
         throw new Error('Invalid or empty image URL received');
@@ -121,8 +180,12 @@ export function EmojiGenerator() {
   return (
     <div className="flex flex-col items-center gap-8 w-full max-w-2xl mx-auto p-4">
       <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4 text-[#1a1a2e]">Create Your Custom Emoji</h1>
-        <p className="text-gray-600">Enter a prompt and let our AI generate a unique emoji just for you!</p>
+        <h1 className="heading-primary heading-with-emoji">
+          Create Your Emoji <span className="emoji-text">✨</span>
+        </h1>
+        <p className="text-lg text-[#2D3047]/70 max-w-2xl mx-auto">
+          Describe your emoji idea and watch the magic happen
+        </p>
       </div>
 
       <form onSubmit={handleGenerate} className="w-full">
