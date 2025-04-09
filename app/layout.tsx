@@ -20,7 +20,11 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en">
-        <body className={`${inter.className} bg-gradient-custom min-h-screen [font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe_UI,Roboto,Inter,sans-serif,'Apple_Color_Emoji','Segoe_UI_Emoji']`}>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+          <meta name="theme-color" content="#FF4500" />
+        </head>
+        <body className={`${inter.className} bg-gradient-custom min-h-screen [font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe_UI,Roboto,Inter,sans-serif,'Apple_Color_Emoji','Segoe_UI_Emoji'] touch-pan-y`}>
           <EmojiProvider>
             <div className="flex flex-col min-h-screen">
               {children}
