@@ -131,16 +131,25 @@ export function EmojiGenerator() {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!isValidImageUrl(generatedEmoji)) return;
     
-    // Create a temporary link element
-    const link = document.createElement('a');
-    link.href = generatedEmoji;
-    link.download = 'ai-moji.png'; // Set the download filename
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      const response = await fetch(generatedEmoji);
+      if (!response.ok) throw new Error('Failed to download image');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `ai-moji-${prompt.toLowerCase().replace(/\s+/g, '-')}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading image:', error);
+    }
   };
 
   const renderEmojiContent = () => {
