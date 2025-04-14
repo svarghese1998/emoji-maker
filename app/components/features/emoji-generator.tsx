@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useEmoji } from '@/app/context/EmojiContext';
 import { AlertTriangle } from 'lucide-react';
@@ -12,6 +12,7 @@ export function EmojiGenerator() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<{ type: string; message: string } | null>(null);
+  const [predictionId, setPredictionId] = useState<string | null>(null);
   const { addEmoji } = useEmoji();
 
   const triggerConfetti = () => {
@@ -67,11 +68,64 @@ export function EmojiGenerator() {
     return typeof url === 'string' && url.trim() !== '' && url.startsWith('http');
   };
 
+  // Add polling effect
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    let attempts = 0;
+    const maxAttempts = 30;
+
+    const checkPrediction = async () => {
+      if (!predictionId) return;
+
+      try {
+        const response = await fetch(`/api/emoji/status/${predictionId}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to check prediction status');
+        }
+
+        if (data.status === 'succeeded' && data.image_url) {
+          setGeneratedEmoji(data.image_url);
+          addEmoji(data.image_url, prompt);
+          triggerConfetti();
+          setPredictionId(null);
+          setIsGenerating(false);
+        } else if (data.status === 'failed') {
+          throw new Error('Image generation failed');
+        } else if (attempts < maxAttempts) {
+          attempts++;
+          // Exponential backoff with max of 4 seconds
+          const delay = Math.min(1000 * Math.pow(1.5, attempts), 4000);
+          timeoutId = setTimeout(checkPrediction, delay);
+        } else {
+          throw new Error('Image generation timed out');
+        }
+      } catch (error) {
+        console.error('Error checking prediction:', error);
+        setError({ type: 'general', message: 'Failed to generate emoji. Please try again.' });
+        setPredictionId(null);
+        setIsGenerating(false);
+      }
+    };
+
+    if (predictionId) {
+      checkPrediction();
+    }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [predictionId, prompt, addEmoji]);
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsGenerating(true);
     setGeneratedEmoji('');
+    setPredictionId(null);
 
     try {
       console.log('Sending prompt:', prompt);
@@ -100,11 +154,14 @@ export function EmojiGenerator() {
         return;
       }
 
-      if (isValidImageUrl(data.image_url)) {
+      if (data.status === 'pending' && data.predictionId) {
+        setPredictionId(data.predictionId);
+      } else if (isValidImageUrl(data.image_url)) {
         console.log('Valid URL detected, setting generated emoji');
         setGeneratedEmoji(data.image_url);
         addEmoji(data.image_url, prompt);
         triggerConfetti();
+        setIsGenerating(false);
       } else {
         console.log('Invalid URL received:', data.image_url);
         throw new Error('Invalid or empty image URL received');
@@ -113,7 +170,6 @@ export function EmojiGenerator() {
       console.error('Error generating emoji:', error);
       setError({ type: 'general', message: 'Failed to generate emoji. Please try again.' });
       setGeneratedEmoji('');
-    } finally {
       setIsGenerating(false);
     }
   };

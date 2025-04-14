@@ -74,7 +74,7 @@ export function Header() {
         </button>
 
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-6" aria-label="Desktop navigation">
+        <nav className="hidden md:flex items-center justify-between flex-1 pl-8">
           <ul className="flex gap-6">
             <li>
               <Link 
@@ -123,7 +123,7 @@ export function Header() {
         </nav>
 
         {/* Mobile Navigation */}
-        <div 
+        <div
           id="mobile-menu"
           role="dialog"
           aria-modal="true"
@@ -131,7 +131,7 @@ export function Header() {
           className={`
             fixed inset-0 bg-white z-10 md:hidden
             transition-all duration-300 ease-in-out
-            ${isMenuOpen ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full'}
+            ${isMenuOpen ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full pointer-events-none'}
           `}
         >
           <nav className="flex flex-col h-full pt-20" aria-label="Mobile navigation">
@@ -192,45 +192,12 @@ export function Header() {
                 </li>
               </ul>
             </div>
-
+            
             {/* Auth Section */}
-            <div className="border-t border-[#2D3047]/10 p-4 bg-gray-50">
-              <div className="flex flex-col gap-4">
-                {isSignedIn ? (
-                  <>
-                    <button 
-                      onClick={handleSignOut}
-                      className="w-full text-lg text-[#2D3047] hover:text-[#FF4500] transition-all duration-200 px-4 py-3 rounded-xl hover:bg-[#2D3047]/5 flex items-center gap-2"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                      </svg>
-                      <span>Sign Out</span>
-                    </button>
-                    <div className="px-4">
-                      <UserButton 
-                        afterSignOutUrl="/"
-                        appearance={{
-                          elements: {
-                            avatarBox: "w-10 h-10 rounded-lg overflow-hidden"
-                          }
-                        }}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <SignInButton mode="modal">
-                    <button 
-                      onClick={() => setIsMenuOpen(false)}
-                      className="w-full text-lg text-[#2D3047] hover:text-[#FF4500] transition-all duration-200 px-4 py-3 rounded-xl hover:bg-[#2D3047]/5 flex items-center gap-2"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                      </svg>
-                      <span>Sign In</span>
-                    </button>
-                  </SignInButton>
-                )}
+            <div className="border-t border-[#2D3047]/10 p-4">
+              <div className="flex items-center justify-between">
+                <AuthButton />
+                {isSignedIn && <UserButton afterSignOutUrl="/"/>}
               </div>
             </div>
           </nav>

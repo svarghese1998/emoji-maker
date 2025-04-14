@@ -4,7 +4,8 @@ import { supabase } from '@/lib/utils/supabase';
 import { uploadEmojiToStorage } from '@/lib/utils/emoji-storage';
 import Replicate from 'replicate';
 
-export const runtime = 'nodejs';
+export const maxDuration = 300; // Set max duration to 300 seconds (5 minutes)
+export const runtime = 'nodejs'; // Changed from edge to nodejs for compatibility with replicate package
 
 if (!process.env.REPLICATE_API_TOKEN) {
   throw new Error('Missing REPLICATE_API_TOKEN');
@@ -65,20 +66,32 @@ export async function POST(req: Request) {
       },
     });
 
-    // 4. Wait for generation to complete
+    // 4. Wait for generation to complete with exponential backoff
     let result = prediction;
     let attempts = 0;
-    const maxAttempts = 30; // 30 seconds timeout
+    const maxAttempts = 15; // Reduced from 30
+    let delay = 1000; // Start with 1 second delay
 
     while (result.status !== "succeeded" && result.status !== "failed" && attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, delay));
       result = await replicate.predictions.get(prediction.id);
       attempts++;
       console.log(`Checking generation status (attempt ${attempts}): ${result.status}`);
+      
+      // Exponential backoff with max of 4 seconds
+      delay = Math.min(delay * 1.5, 4000);
     }
 
-    if (result.status === "failed" || attempts >= maxAttempts) {
-      throw new Error(attempts >= maxAttempts ? "Image generation timed out" : "Image generation failed");
+    if (result.status === "failed") {
+      throw new Error("Image generation failed");
+    }
+
+    if (attempts >= maxAttempts) {
+      // Return the prediction ID so the client can continue polling
+      return NextResponse.json({ 
+        status: 'pending',
+        predictionId: prediction.id
+      }, { status: 202 });
     }
 
     const imageUrl = result.output?.[0];
